@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../../学习/机器人综合实践"
+		},
+		{
+			"path": "../pycommunication"
+		}
+	],
+	"settings": {}
+}
