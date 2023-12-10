@@ -8,6 +8,7 @@ import time
 from PIL import Image
 import matplotlib.pyplot as plt
 
+
 class Camera():
     def __init__(self) -> None:
         self.kinect=PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Depth | PyKinectV2.FrameSourceTypes_Color)
@@ -24,12 +25,56 @@ class Camera():
         return cv2.cvtColor(dep_frame, cv2.COLOR_GRAY2RGB)
 
     # 获取rgb图, 1080x1920x3
-    def get_last_rbg(self)->np.ndarray:
+    def get_last_rgb(self)->np.ndarray:
         frame=np.zeros([1,1])
         while (frame==0).all(): #循环读取，直到不是全0           
             frame = self.kinect.get_last_color_frame()
         print("get rgb frame!")
         return np.reshape(frame, [1080, 1920, 4])[:, :, 0:3]
+
+    def get_point_cloud(self):
+        # 首先获取rgb图到空间点坐标的映射
+        rgb=self.get_last_rgb() #获取当前rgb图像
+        world_point_map=mapper.color_2_world(self.kinect, self.kinect._depth_frame_data, PyKinectV2._CameraSpacePoint) #获取了rgb图到空间点坐标的映射
+        world_point_map=np.asarray(world_point_map) #转为np array格式
+
+        # 拼接rgb颜色值，形成(x,y,z,r,g,b)的点格式
+        world_point_rgb=np.concatenate([world_point_map,rgb], axis=2)
+        point_cloud=world_point_rgb.reshape(-1,6).T #变为(6,n)的点云格式
+        return point_cloud
+    
+    def filter_point_cloud(self, point_cloud):
+        # 从整帧点云中滤出零件点云
+        # point_cloud.shape=(6,n)
+        # 首先使用颜色阈值进行筛选
+        color_lower=[0, 190, 190]
+        color_upper=[140, 255, 255]
+        point_cloud_filtered=[]
+        for point in point_cloud.T:
+            if cv2.inRange(point[3:], color_lower, color_upper):
+                point_cloud_filtered.append(point)
+        point_cloud_filtered=np.asarray(point_cloud_filtered).T #转回(6,n)的格式
+
+        # 使用dbscan算法过滤掉离群点
+        from sklearn.cluster import DBSCAN
+        from collections import Counter
+        points=points_filtered.T[:,0:3]
+        dbscan=DBSCAN(eps=0.1,min_samples=20)
+        if points.shape[1]==3:
+            dbscan.fit(points)
+        else:
+            dbscan.fit(points[:,0:3])
+        # 找到数量最多的点群
+        counter=Counter(dbscan.labels_)
+        main_idx=counter.most_common(2)[0][0]  
+        # 如果是-1最多，那取其余中最多的cluster
+        if main_idx==-1:
+            main_idx=counter.most_common(2)[-1][0]     
+        print("counter:",counter)
+        print("main_idx:",main_idx)
+        points_filtered=points[dbscan.labels_==main_idx]
+
+        return points_filtered
 
 
     
